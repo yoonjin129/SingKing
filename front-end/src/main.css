@@ -1,0 +1,336 @@
+.singking_battle_title,
+.singking_grow_title,
+.singking_ability_title,
+.weekly_ranking_title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #737373;
+  margin-left: 10px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 배틀, 마이페이지 카드 */
+.battle_component,
+.mypage_component {
+  margin: 0 auto;
+  width: 500px;
+  height: 130px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  display: flex;
+  align-items: center;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease-in-out;
+}
+
+.battle_component:hover {
+  transform: translateY(-5px);
+}
+
+.battle_text {
+  margin-left: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: start;
+}
+
+.battle_text_1 {
+  font-size: 28px;
+  font-weight: bold;
+  color: #525252;
+  margin-bottom: 10px;
+}
+
+.battle_text_2 {
+  font-size: 15px;
+  color: #868686;
+}
+
+.battle_component img {
+  width: 220px;
+  height: 90px;
+  margin-left: 68px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 성장 카드 */
+.grow_component {
+  display: flex;
+  margin-bottom: 30px;
+}
+
+.grow_component_1 {
+  width: 150px;
+  height: 240px;
+  background-color: white;
+  border-radius: 12px;
+  margin: 0 auto;
+  text-align: center;
+  font-weight: bold;
+  font-size: 17px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease-in-out;
+  padding-top: 20px;
+  position: relative;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.grow_component_1:hover {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.key_score,
+.beat_score,
+.pronun_score {
+  width: 100px;
+  height: 80px;
+  border-radius: 10px;
+  line-height: 80px;
+  margin: 30px auto;
+  color: rgb(0, 0, 0);
+  font-size: 20px;
+  box-shadow: inset 0px 4px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 그래프 바 애니메이션 */
+.graph_area {
+  height: 120px;
+}
+.graph_bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+  height: 0;
+  transition: height 0.5s ease-in-out;
+}
+.graph_text {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  color: #727272;
+  font-weight: bold;
+  font-size: 22px;
+}
+
+/* 색상 */
+.grow_component_1:nth-child(1) .graph_bar {
+  background-color: rgba(255, 179, 193, 0.7);
+}
+.grow_component_1:nth-child(2) .graph_bar {
+  background-color: rgba(197, 225, 165, 0.7);
+}
+.grow_component_1:nth-child(3) .graph_bar {
+  background-color: rgba(255, 229, 153, 0.7);
+}
+
+.grow_component_1 img {
+  width: 50px;
+  height: 50px;
+  margin-top: 10px;
+}
+
+/* 실력 비교 */
+.ability_component {
+  width: 500px;
+  height: 320px;
+  background-color: white;
+  margin: 0 auto;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.ability_title {
+  font-size: 20px;
+  text-align: center;
+  font-weight: bold;
+  color: #525252;
+  margin-top: 25px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+  width: 100%;
+}
+
+.ability_title .first,
+.ability_title .last {
+  flex: 1;
+}
+
+/* 주간 랭킹 박스 */
+.weekly_ranking_component {
+  width: 500px;
+  height: 500px;
+  background-color: white;
+  margin: 0 auto;
+  border-radius: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 퍼센트 비교 */
+.progress-comparison {
+  display: flex;
+  justify-content: space-between;
+  align-items: top;
+  margin-bottom: 20px;
+  padding: 0px 20px;
+}
+
+/* 가운데 제목 */
+.progress-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #525252;
+  width: 80px;
+  text-align: center;
+}
+
+/* 좌우 퍼센트 바 */
+.progress-container {
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 50px;
+}
+
+/* 🔹 트랙 및 막대 (7일 전 오른쪽→왼쪽) */
+.progress-track {
+  width: 100%;
+  background-color: #e0e0e0;
+  height: 30px;
+  border-radius: 5px;
+  position: relative;
+  margin-bottom: 5px;
+  overflow: hidden;
+}
+
+.progress-last-week,
+.progress-latest {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 5px;
+  transition: width 1.5s ease-in-out;
+}
+
+/* 최신 기록 → 왼쪽→오른쪽 */
+.progress-latest {
+  left: 0;
+  right: auto;
+}
+
+/* 7일 전 → 오른쪽→왼쪽 */
+.progress-last-week {
+  right: 0;
+  left: auto;
+}
+
+/* 🔹 색상 정의 */
+.progress-comparison.pitch .progress-last-week {
+  background-color: #ffb3c1;
+}
+.progress-comparison.pitch .progress-latest {
+  background-color: #a5d8ff;
+}
+.progress-comparison.rhythm .progress-last-week {
+  background-color: #ffd6a5;
+}
+.progress-comparison.rhythm .progress-latest {
+  background-color: #c5e1a5;
+}
+.progress-comparison.pronunciation .progress-last-week {
+  background-color: #ffe599;
+}
+.progress-comparison.pronunciation .progress-latest {
+  background-color: #d7afff;
+}
+
+/* 텍스트 */
+span {
+  font-size: 14px;
+  color: #737373;
+}
+
+.last-week {
+  text-align: right;
+}
+
+.latest {
+  text-align: left;
+}
+
+/* 랭킹 */
+.ranking_container {
+  width: 100%;
+}
+.ranking_item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px;
+  margin-bottom: 10px;
+  gap: 20px;
+  font-size: 20px;
+  height: 60px;
+}
+.ranking_item .rank {
+  font-weight: bold;
+  color: #525252;
+  font-size: 23px;
+  flex: 0 0 50px;
+  text-align: center;
+}
+.ranking_item .user_name {
+  font-size: 23px;
+  color: #333;
+  flex: 0.9;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ranking_item .rank_score {
+  font-size: 23px;
+  color: #525252;
+  font-weight: bold;
+  flex: 0 0 60px;
+  text-align: center;
+}
+
+/* 마이페이지 */
+.mypage_user_icon {
+  width: 110px;
+  height: 118px;
+}
+.mypage_tone_logo {
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 16px;
+  text-align: center;
+  font-weight: 600;
+  background-color: #525252;
+  color: #fff;
+}
+.mypage_tone_area {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0px 20px 0px 30px;
+  width: 100%;
+}
