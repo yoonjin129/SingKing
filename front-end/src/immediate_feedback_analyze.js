@@ -42,6 +42,7 @@ function Immediate_feedback_analyze() {
   const audioRef = useRef(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
+  const finishingRef = useRef(false); // ✅ 종료 중복 방지
   const navigate = useNavigate();
   const [showToneAdjuster, setShowToneAdjuster] = useState(true);
   const [showSplash, setShowSplash] = useState(false);
@@ -52,29 +53,18 @@ function Immediate_feedback_analyze() {
   const playbackActionRef = useRef(null); // 'start' | 'resume' | null
   const startAfterCountdownRef = useRef(false);
 
-  // 🔻🔻🔻 [수정됨] location.state에서 song 객체를 올바르게 파싱 🔻🔻🔻
+  // 🔻 location.state로부터 song 객체 사용
   const location = useLocation();
-
-  // 1. location.state에서 song 객체를 가져옵니다.
-  // (state가 없거나 song 객체가 없으면 || {} 를 통해 빈 객체로 만듭니다)
   const { song } = location.state || {};
-
-  // 2. song 객체 또는 기본값에서 값을 추출합니다.
   const songTitle = song?.recommend || "너였다면";
   const artist = song?.artist || "정승환";
   const imagePath = song?.image || `${PUB}/img/songs/cover_if_it_is_you.png`;
-  // 🔺🔺🔺 [수정됨] 🔺🔺🔺
 
-  const handleToneAdjusterFinish = () => {
-    // 톤 조절 끝나도 카운트다운은 띄우지 않음 (재생 버튼에서 띄움)
-    setShowToneAdjuster(false);
-  };
+  const handleToneAdjusterFinish = () => setShowToneAdjuster(false);
 
   const handleSplashFinish = () => {
     setShowSplash(false);
     setShowMainContent(true);
-
-    // 카운트다운 이후 행동 실행
     if (startAfterCountdownRef.current) {
       startAfterCountdownRef.current = false;
       if (playbackActionRef.current === "start") {
@@ -100,7 +90,6 @@ function Immediate_feedback_analyze() {
       } else {
         setTone(pitch);
       }
-      // 카운트다운은 재생 버튼에서 처리
       setShowToneAdjuster(false);
     } catch (error) {
       console.error("서버 통신 오류:", error);
@@ -116,41 +105,33 @@ function Immediate_feedback_analyze() {
 
   const fetchLyrics = async () => {
     try {
-      // 곡/가수 세션 확정
       const t = await safeFetchJSON(`${API_BASE}/training`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ songTitle, artist }),
       });
 
-      // 1) training 응답에 lyrics가 들어오는 경우
+      // 1) training 응답에 lyrics 포함
       if (Array.isArray(t?.lyrics)) {
         const normalized = t.lyrics.map((row) => {
           if (Array.isArray(row) && row.length >= 2)
             return [Number(row[0]) || 0, String(row[1] || "")];
-          if (
-            row &&
-            typeof row === "object" &&
-            "time" in row &&
-            "text" in row
-          ) {
+          if (row && typeof row === "object" && "time" in row && "text" in row)
             return [Number(row.time) || 0, String(row.text || "")];
-          }
           return [0, String(row || "")];
         });
         setLyrics(normalized);
         return;
       }
 
-      // 2) 별도 /lyrics 엔드포인트로 제공되는 경우
+      // 2) 별도 /lyrics 사용
       const lrc = await safeFetchJSON(`${API_BASE}/lyrics`, { method: "GET" });
       const arr = Array.isArray(lrc?.lyrics) ? lrc.lyrics : [];
       const normalized = arr.map((row) => {
         if (Array.isArray(row) && row.length >= 2)
           return [Number(row[0]) || 0, String(row[1] || "")];
-        if (row && typeof row === "object" && "time" in row && "text" in row) {
+        if (row && typeof row === "object" && "time" in row && "text" in row)
           return [Number(row.time) || 0, String(row.text || "")];
-        }
         return [0, String(row || "")];
       });
       setLyrics(normalized);
@@ -240,7 +221,7 @@ function Immediate_feedback_analyze() {
       return;
     }
 
-    // 현재 곡/가수로 세션 확정 (가사와 동일)
+    // 현재 곡/가수 세션 확정
     try {
       await safeFetchJSON(`${API_BASE}/training`, {
         method: "POST",
@@ -327,8 +308,39 @@ function Immediate_feedback_analyze() {
     }
   };
 
+  // ===== 공통 종료(버튼/자동) =====
+  const doStopAndGoFeedback = async () => {
+    if (finishingRef.current) return; // ✅ 중복 방지
+    finishingRef.current = true;
+
+    const audio = audioRef.current;
+
+    // 녹음 정지
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      try {
+        mediaRecorder.stop();
+      } catch (e) {
+        console.warn("MediaRecorder stop 실패:", e);
+      }
+    }
+
+    // 오디오 정지 및 위치 초기화
+    if (audio) {
+      try {
+        audio.pause();
+      } catch {}
+      audio.currentTime = 0;
+    }
+
+    setIsPlaying(false);
+    setIsPaused(false);
+
+    // 업로드는 onstop에서 진행 → 그 직후 서버 분석 트리거
+    // 여기서는 바로 피드백 페이지로 이동(피드백에서 로딩/폴링)
+    navigate("/feedback", { state: { songTitle, artist, imagePath } });
+  };
+
   // ===== 버튼 핸들러 =====
-  // 재생(처음 재생): 매번 카운트다운을 띄우고, 끝난 뒤 시작
   const handleStart = async () => {
     playbackActionRef.current = "start";
     startAfterCountdownRef.current = true;
@@ -345,32 +357,20 @@ function Immediate_feedback_analyze() {
     setIsPlaying(false);
   };
 
-  // 재개: 매번 카운트다운을 띄우고, 끝난 뒤 재개
   const handleResume = () => {
     playbackActionRef.current = "resume";
     startAfterCountdownRef.current = true;
     setShowSplash(true);
   };
 
-  // 녹음 완전 정지 → 업로드(onstop) → 분석 시작 트리거 → 피드백 페이지 이동
+  // (사용자 수동 정지)
   const handleStop = async () => {
-    const audio = audioRef.current;
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      try {
-        mediaRecorder.stop();
-      } catch (e) {
-        console.warn("MediaRecorder stop 실패:", e);
-      }
-    }
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-    setIsPlaying(false);
-    setIsPaused(false);
+    await doStopAndGoFeedback();
+  };
 
-    // 업로드가 onstop에서 진행되므로, 피드백 이동은 그대로 수행
-    navigate("/feedback", { state: { songTitle, artist, imagePath } });
+  // (자동: 노래가 끝나면)
+  const handleAudioEnded = async () => {
+    await doStopAndGoFeedback();
   };
 
   // 서버 업로드 (✅ /uploads/tone) → 업로드 성공 시 분석 시작
@@ -492,6 +492,7 @@ function Immediate_feedback_analyze() {
               src={audioSrc || undefined}
               preload="auto"
               onTimeUpdate={handleTimeUpdate}
+              onEnded={handleAudioEnded} // ✅ 노래 끝 → 자동 종료 & 피드백 이동
               onError={(e) => {
                 console.error("HTMLAudioElement error", e);
                 setAudioError(

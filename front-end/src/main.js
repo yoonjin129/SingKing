@@ -19,6 +19,16 @@ function clamp100(n) {
   return Math.min(100, Math.max(0, x));
 }
 
+// 안전 파서
+function readJSON(key) {
+  try {
+    const v = sessionStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ProgressComparison 컴포넌트 정의
 function ProgressComparison({ title, lastWeekValue, latestValue }) {
   const [animatedLastWeekValue, setAnimatedLastWeekValue] = useState(0);
@@ -92,7 +102,24 @@ function Main() {
   });
   const [userName, setUserName] = useState("게스트");
 
-  // 데이터 fetch 함수
+  // “7일 전” 베이스라인을 세션에서 읽거나(없으면 생성 후 저장)
+  function getOrInitLastWeekBaseline() {
+    let baseline = readJSON("lastWeekBaseline");
+    if (!baseline) {
+      baseline = {
+        lastWeekPitch: randomInDecade(40), // 40점대
+        lastWeekBeat: randomInDecade(40), // 40점대
+        lastWeekPronunciation: randomInDecade(60), // 60점대
+        _savedAt: new Date().toISOString(),
+      };
+      try {
+        sessionStorage.setItem("lastWeekBaseline", JSON.stringify(baseline));
+      } catch {}
+    }
+    return baseline;
+  }
+
+  // 데이터 fetch + 세션 점수 동기화
   const fetchData = async () => {
     try {
       // 1) /index: 주간 랭킹 + 사용자 이름
@@ -103,47 +130,56 @@ function Main() {
       setRankingData(indexData.data || []);
       if (indexData.user_name) setUserName(indexData.user_name);
 
-      // 2) /my_page: 원본 점수 (받아오긴 하지만, 아래에서 요구하는 '점대' 규칙으로 표시값을 강제 세팅)
+      // 2) /my_page: 사용자 톤/이름 등
       const resMyPage = await fetch("http://localhost:5000/my_page", {
         credentials: "include",
       });
       const myPageData = await resMyPage.json();
-
-      // 사용자 이름이 있으면 갱신
       if (myPageData.user_name) setUserName(myPageData.user_name);
 
-      // ============== 표시 규칙 강제 적용 ==============
-      // 7일 전: 음정/박자=40점대, 발음=60점대
-      const lastWeekPitch = randomInDecade(40);
-      const lastWeekBeat = randomInDecade(40);
-      const lastWeekPronunciation = randomInDecade(60);
+      // === 핵심: feedback.js에서 저장된 마지막 점수 불러오기 ===
+      const last = readJSON("lastFeedbackScores");
+      const baseline = getOrInitLastWeekBaseline();
 
-      // 최신 기록: 음정/박자=70점대, 발음=80점대
-      const pitch = randomInDecade(70);
-      const beat = randomInDecade(70);
-      const pronunciation = randomInDecade(80);
+      if (last && typeof last === "object") {
+        // feedback 화면과 동일한 값으로 최신 기록을 그대로 표시
+        const pitch = Number(last.pitch_score) || 0;
+        const beat = Number(last.beat_score) || 0;
+        const pronunciation = Number(last.pronunciation_score) || 0;
 
-      setUserData({
-        pitch,
-        beat,
-        pronunciation,
-        lastWeekPitch,
-        lastWeekBeat,
-        lastWeekPronunciation,
-        tone: myPageData.user_tone || "진단필요",
-      });
-      // ===============================================
+        setUserData({
+          pitch,
+          beat,
+          pronunciation,
+          lastWeekPitch: baseline.lastWeekPitch,
+          lastWeekBeat: baseline.lastWeekBeat,
+          lastWeekPronunciation: baseline.lastWeekPronunciation,
+          tone: myPageData.user_tone || "진단필요",
+        });
+      } else {
+        // 세션 점수가 아직 없다면 기존 랜덤 표시 (초기 방문 등)
+        setUserData({
+          pitch: randomInDecade(70), // 임시 70점대
+          beat: randomInDecade(70),
+          pronunciation: randomInDecade(80),
+          lastWeekPitch: baseline.lastWeekPitch,
+          lastWeekBeat: baseline.lastWeekBeat,
+          lastWeekPronunciation: baseline.lastWeekPronunciation,
+          tone: myPageData.user_tone || "진단필요",
+        });
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
 
-      // 에러 시에도 기본 규칙대로 예시값 세팅(앱이 비어 보이지 않도록)
+      // 에러 시에도 앱이 비어 보이지 않도록 기본값 세팅
+      const baseline = getOrInitLastWeekBaseline();
       setUserData({
         pitch: randomInDecade(70),
         beat: randomInDecade(70),
         pronunciation: randomInDecade(80),
-        lastWeekPitch: randomInDecade(40),
-        lastWeekBeat: randomInDecade(40),
-        lastWeekPronunciation: randomInDecade(60),
+        lastWeekPitch: baseline.lastWeekPitch,
+        lastWeekBeat: baseline.lastWeekBeat,
+        lastWeekPronunciation: baseline.lastWeekPronunciation,
         tone: "진단필요",
       });
     }
@@ -151,6 +187,29 @@ function Main() {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // 혹시 다른 탭/창에서 피드백을 완료하면, storage 이벤트로 갱신해 주기 (선택적 강화)
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "lastFeedbackScores" && e.newValue) {
+        try {
+          const last = JSON.parse(e.newValue);
+          const baseline = getOrInitLastWeekBaseline();
+          setUserData((prev) => ({
+            ...prev,
+            pitch: Number(last.pitch_score) || 0,
+            beat: Number(last.beat_score) || 0,
+            pronunciation: Number(last.pronunciation_score) || 0,
+            lastWeekPitch: baseline.lastWeekPitch,
+            lastWeekBeat: baseline.lastWeekBeat,
+            lastWeekPronunciation: baseline.lastWeekPronunciation,
+          }));
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   return (

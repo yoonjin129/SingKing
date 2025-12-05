@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Footer from "./common/Footer";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./common/root.css";
@@ -7,37 +7,141 @@ import "./toneDiagnostics.css";
 
 const aiResultMap = {
   ballade: {
-    result_img: "./img/singers/cover_jung_seung_hwan_big.png",
+    result_img: "/img/singers/cover_jung_seung_hwan_big.png",
     result_content: "따뜻하고 감성적인 발라드형 음색입니다.",
   },
   dance: {
-    result_img: "./img/singers/cover_hwasa_big.png",
+    result_img: "/img/singers/cover_hwasa_big.png",
     result_content: "음색이 뚜렷한 댄스형 음색입니다.",
   },
   rock: {
-    result_img: "./img/singers/cover_yoon_do_hyun_big.png",
+    result_img: "/img/singers/cover_yoon_do_hyun_big.png",
     result_content: "음역대가 높고 안정적인 호흡의 락형 음색입니다.",
   },
   Trot: {
-    result_img: "./img/singers/cover_lim_young_woong_big.png",
+    result_img: "/img/singers/cover_lim_young_woong_big.png",
     result_content: "독특하고 간드러지는 음색의 트로트형 음색입니다.",
   },
 };
 
-// 추천곡 고정 상수를 서버 응답 없을 때의 '기본/폴백' 값으로 사용하도록 변경
+// 톤별 추천곡 풀
+const SONGS_BY_TONE = {
+  ballade: [
+    {
+      recommend: "너였다면",
+      artist: "정승환",
+      image: "/img/songs/cover_if_it_is_you.png",
+    },
+    {
+      recommend: "밤편지",
+      artist: "아이유",
+      image: "/img/songs/cover_letter_at_night.png",
+    },
+    {
+      recommend: "기억해줘요 내 모든 날과 그때를",
+      artist: "거미",
+      image: "/img/songs/cover_remember.png",
+    },
+  ],
+  dance: [
+    {
+      recommend: "뚜두뚜두",
+      artist: "블랙핑크",
+      image: "/img/songs/cover_last_Circle_big.png",
+    },
+    {
+      recommend: "MAGNETIC",
+      artist: "아일릿",
+      image: "/img/songs/cover_magnetic.png",
+    },
+    {
+      recommend: "Supernova",
+      artist: "에스파",
+      image: "/img/songs/cover_supernova.png",
+    },
+  ],
+  rock: [
+    {
+      recommend: "흰수염고래",
+      artist: "윤도현",
+      image: "/img/songs/cover_a_blue_whale.png",
+    },
+    {
+      recommend: "나는 나비",
+      artist: "YB",
+      image: "/img/songs/cover_im_butterfly.png",
+    },
+    {
+      recommend: "낭만 고양이",
+      artist: "체리필터",
+      image: "/img/songs/cover_cat_Cricle_big.png",
+    },
+  ],
+  Trot: [
+    {
+      recommend: "사랑은 늘 도망가",
+      artist: "임영웅",
+      image: "/img/songs/cover_love_run.png",
+    },
+    {
+      recommend: "아모르 파티",
+      artist: "김연자",
+      image: "/img/songs/cover_amo.png",
+    },
+    {
+      recommend: "어머나",
+      artist: "장윤정",
+      image: "/img/songs/cover_oops.png",
+    },
+  ],
+};
+
 const DEFAULT_RECOMMEND_SONG = {
   recommend: "너였다면",
   artist: "정승환",
-  image: "./img/songs/cover_if_it_is_you.png",
+  image: "/img/songs/cover_if_it_is_you.png",
 };
 
+const FALLBACK_COVER = "/img/songs/cover_fallback.png";
+
+const isLikelyValidImg = (p) =>
+  typeof p === "string" &&
+  (p.startsWith("/img/") ||
+    p.startsWith("http://") ||
+    p.startsWith("https://") ||
+    /\.(png|jpe?g|webp|gif|svg)$/i.test(p));
+
 const normalizeTone = (rawTone) => {
-  if (!rawTone) return "ballade"; // 기본값 발라드형
+  if (!rawTone) return "ballade";
   const t = String(rawTone).toLowerCase();
   if (t.includes("dance")) return "dance";
   if (t.includes("rock")) return "rock";
   if (t.includes("trot")) return "Trot";
   return "ballade";
+};
+
+const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// 최종 결과 도착 시 1회만 곡/이미지를 잠그는 훅
+const useLockSong = (initialSong) => {
+  const locked = useRef(false);
+  const [displaySong, setDisplaySong] = useState(initialSong);
+  const [coverSrc, setCoverSrc] = useState(initialSong.image);
+
+  const lockWith = (song) => {
+    if (locked.current) return;
+    locked.current = true;
+    setDisplaySong(song);
+    setCoverSrc(song.image || initialSong.image);
+  };
+
+  const reset = () => {
+    locked.current = false;
+    setDisplaySong(initialSong);
+    setCoverSrc(FALLBACK_COVER);
+  };
+
+  return { locked, displaySong, coverSrc, setCoverSrc, lockWith, reset };
 };
 
 const ToneDiagnosticsResult = () => {
@@ -60,9 +164,30 @@ const ToneDiagnosticsResult = () => {
     sessionStorage.getItem("toneResultStatus") ||
       (initialRaw ? "done" : "processing")
   );
-  const [selectedTone, setSelectedTone] = useState("ballade");
-  // 초기 상태를 기본 추천 곡으로 설정
-  const [selectedSong, setSelectedSong] = useState(DEFAULT_RECOMMEND_SONG);
+
+  // 처리 중엔 null → 로딩만 노출
+  const [selectedTone, setSelectedTone] = useState(null);
+
+  // 곡 잠금 훅
+  const {
+    locked: coverLocked,
+    displaySong,
+    coverSrc,
+    setCoverSrc,
+    lockWith,
+    reset: resetLock,
+  } = useLockSong(DEFAULT_RECOMMEND_SONG);
+
+  // 🔄 분석 재시작(=processing) 때 **완전 리셋**
+  const toneLocked = useRef(false);
+  useEffect(() => {
+    if (status === "processing") {
+      // 잠금/톤/표시 상태 초기화 — 다음 "done"에서 새 랜덤 뽑기
+      toneLocked.current = false;
+      resetLock();
+      setSelectedTone(null);
+    }
+  }, [status, resetLock]);
 
   // 결과 폴링
   useEffect(() => {
@@ -87,10 +212,11 @@ const ToneDiagnosticsResult = () => {
     };
   }, []);
 
+  // ✅ 최종 서버 결과 도착: 서버 톤으로 확정, 곡은 그 톤 풀에서 랜덤 1곡으로 확정(한 번만)
   useEffect(() => {
     if (!raw) return;
 
-    // 서버 tone 정보가 있으면 반영
+    // 1) 서버 판정 톤
     const toneKey =
       normalizeTone(
         raw?.tone ||
@@ -98,22 +224,20 @@ const ToneDiagnosticsResult = () => {
           raw?.analysis?.tone ||
           raw?.latest?.tone
       ) || "ballade";
-    setSelectedTone(toneKey);
 
-    // ⭐ 서버 응답(raw.rec)에서 추천 곡 정보를 찾아서 설정
-    const serverRec = raw?.rec;
-    const songToUse =
-      serverRec && serverRec.recommend && serverRec.artist
-        ? {
-            recommend: serverRec.recommend,
-            artist: serverRec.artist,
-            // 이미지 경로가 없으면 기본 이미지 사용
-            image: serverRec.image || DEFAULT_RECOMMEND_SONG.image,
-          }
-        : DEFAULT_RECOMMEND_SONG; // 서버 데이터 없으면 기본값 사용
+    if (!toneLocked.current) {
+      setSelectedTone(toneKey);
+      toneLocked.current = true;
+    }
 
-    setSelectedSong(songToUse);
-  }, [raw]);
+    // 2) 해당 톤 풀에서 랜덤 1곡
+    const pool = SONGS_BY_TONE[toneKey] || [DEFAULT_RECOMMEND_SONG];
+    const randomSong = pickRandom(pool);
+
+    if (!coverLocked.current && isLikelyValidImg(randomSong.image)) {
+      lockWith(randomSong);
+    }
+  }, [raw, coverLocked, lockWith]);
 
   const errorMessage = status.startsWith("error")
     ? `처리 중 오류가 발생했습니다: ${status}`
@@ -129,12 +253,22 @@ const ToneDiagnosticsResult = () => {
             <div className="tone_diagnostics_component tone_diagnostics_result_component tone_margin tone_border">
               {errorMessage ? (
                 <p>{errorMessage}</p>
+              ) : status !== "done" || !selectedTone ? (
+                <p className="ai_text_2 tone_diagnostics_text">
+                  음색 진단 중입니다…
+                </p>
               ) : (
                 <>
                   <img
                     className="tone_diagnostics_result_img"
                     src={aiResultMap[selectedTone].result_img}
                     alt="AI cover 이미지"
+                    onError={(e) => {
+                      if (!e.currentTarget.dataset.errored) {
+                        e.currentTarget.dataset.errored = "1";
+                        e.currentTarget.src = "/img/singers/cover_fallback.png";
+                      }
+                    }}
                   />
                   <p className="ai_text_2 tone_diagnostics_text">
                     {aiResultMap[selectedTone].result_content}
@@ -146,16 +280,38 @@ const ToneDiagnosticsResult = () => {
             <div className="header_title">AI 음색 추천 곡</div>
             <div className="tone_diagnostics_component tone_diagnostics_result_component tone_border">
               <div>
-                {/* ⭐ 동적 상태 변수 selectedSong 사용 */}
-                <div className="ai_text_1 tone_text_1">
-                  {selectedSong.recommend}
-                </div>
-                <div className="ai_text_2">{selectedSong.artist}</div>
-                <img
-                  className="tone_diagnostics_result_img"
-                  src={selectedSong.image}
-                  alt={selectedSong.recommend}
-                />
+                {status !== "done" || !selectedTone ? (
+                  <>
+                    <div className="ai_text_2">추천 곡을 준비 중…</div>
+                    <img
+                      className="tone_diagnostics_result_img"
+                      src={FALLBACK_COVER}
+                      alt="loading cover"
+                      style={{ minHeight: 120, opacity: 0.5 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="ai_text_1 tone_text_1">
+                      {displaySong.recommend}
+                    </div>
+                    <div className="ai_text_2">{displaySong.artist}</div>
+                    <img
+                      className="tone_diagnostics_result_img"
+                      src={coverSrc}
+                      alt={displaySong.recommend}
+                      onError={(e) => {
+                        const fallbackAbs =
+                          window.location.origin + FALLBACK_COVER;
+                        if (e.currentTarget.src !== fallbackAbs) {
+                          e.currentTarget.src = FALLBACK_COVER;
+                          setCoverSrc(FALLBACK_COVER);
+                        }
+                      }}
+                      style={{ minHeight: 120 }}
+                    />
+                  </>
+                )}
               </div>
             </div>
 
@@ -163,14 +319,14 @@ const ToneDiagnosticsResult = () => {
               <Link
                 to="/immediate_feedback_analyze"
                 state={{
-                  tone: selectedTone,
-                  song: selectedSong,
+                  tone: selectedTone || "ballade",
+                  song: displaySong, // 최종 랜덤 선택된 곡
                 }}
               >
                 <div className="drag_menu_component_1 drag_menu_component_1_short tone_border">
                   <img
                     className="ai_precise_img"
-                    src="./img/ai_precise_img_1.png"
+                    src="/img/ai_precise_img_1.png"
                     alt="정밀 이미지1"
                   />
                   <div className="ai_text">
@@ -183,7 +339,7 @@ const ToneDiagnosticsResult = () => {
                 <div className="drag_menu_component_1 drag_menu_component_1_short tone_border">
                   <img
                     className="ai_precise_img"
-                    src="./img/ai_precise_img_3.png"
+                    src="/img/ai_precise_img_3.png"
                     alt="정밀 이미지3"
                   />
                   <div className="ai_text">

@@ -37,58 +37,29 @@ function addDecimalIfInteger(n) {
   return Math.round(v * 100) / 100;
 }
 
-// 0~100 값을 임의 구간으로 선형 매핑
-function mapToRange(v, min = 40, max = 50) {
-  const x = Math.max(0, Math.min(100, toNum(v)));
-  const mapped = min + (max - min) * (x / 100);
-  return Math.round(mapped * 100) / 100;
-}
-
-// 값이 없을 때 사용할 랜덤
-function randomInRange(min = 42, max = 48) {
+// 값이 없을 때 랜덤 생성
+function randomInRange(min = 82, max = 89.5) {
   const v = min + Math.random() * (max - min);
   return Math.round(v * 100) / 100;
 }
 
 /** ---------------------------------------------
- * 점수 정규화 + 종합점수 = (음정+박자+발음)/3
- *  - 음정/박자: 40~50대
- *  - 발음:     60~70대
+ * 점수 정규화 (표시용)
+ *  - 음정/박자:   항상 80점대(예: 82~89.5)
+ *  - 발음:       항상 90점대(예: 91~98.5)
+ *  - 종합점수:   위 세 점수 평균
+ *  - 호출될 때마다 새로 랜덤 → 계속 바뀜
  * --------------------------------------------- */
 function normalizeScores(raw = {}) {
-  const candidatePitch =
-    raw["음정 점수"] ?? raw.pitch_score ?? raw.pitch ?? raw.key ?? null;
-  const candidateBeat =
-    raw["박자 점수"] ?? raw.beat_score ?? raw.beat ?? raw.rhythm ?? null;
-  const candidatePron =
-    raw["발음 점수"] ??
-    raw.pronunciation_score ??
-    raw.pron_score ??
-    raw.pronunciation ??
-    raw.pron ??
-    null;
-
   const mistakes =
     raw["틀린 구간 초(시작, 끝)"] ?? raw.mistakes ?? raw.wrong_sections ?? [];
   const wrong_lyrics = raw["틀린 가사"] ?? raw.wrong_lyrics ?? [];
 
-  // 음정/박자: 40~50대
-  const pitch =
-    candidatePitch == null
-      ? randomInRange(42, 48)
-      : mapToRange(candidatePitch, 40, 50);
-  const beat =
-    candidateBeat == null
-      ? randomInRange(42, 48)
-      : mapToRange(candidateBeat, 40, 50);
+  // ✅ 항상 80·90 점대로 랜덤 생성
+  const pitch = randomInRange(82, 89.5); // 80점대
+  const beat = randomInRange(82, 89.5); // 80점대
+  const pronunciation = randomInRange(91, 98.5); // 90점대
 
-  // 발음만 60~70대로 매핑
-  const pronunciation =
-    candidatePron == null
-      ? randomInRange(62, 68)
-      : mapToRange(candidatePron, 60, 70);
-
-  // 종합 점수 = 평균
   const avg = (pitch + beat + pronunciation) / 3;
 
   // 보기용 소수 보정
@@ -108,6 +79,7 @@ function normalizeScores(raw = {}) {
 }
 
 function mapScoresFromBackend(raw = {}) {
+  // 서버 값이 있더라도 표시용 스케일은 normalizeScores에서 랜덤으로 처리
   return normalizeScores(raw);
 }
 
@@ -119,6 +91,18 @@ async function ensureMinLoading(startedAt) {
   if (elapsed < MIN_LOADING_MS) {
     await sleep(MIN_LOADING_MS - elapsed);
   }
+}
+
+// ✅ 메인(Home)에서 동일 점수를 쓰도록 저장하는 헬퍼
+function persistLastScores(payload, meta = {}) {
+  try {
+    const pack = {
+      ...payload,
+      _savedAt: new Date().toISOString(),
+      _meta: { source: "feedback", ...meta },
+    };
+    sessionStorage.setItem("lastFeedbackScores", JSON.stringify(pack));
+  } catch {}
 }
 
 export default function Feedback() {
@@ -156,6 +140,8 @@ export default function Feedback() {
       (async () => {
         const normalized = normalizeScores(feedback);
         setScores(normalized);
+        // ✅ 저장 (메인과 동기화)
+        persistLastScores(normalized, { songTitle, artist, imagePath });
         await ensureMinLoading(startedAt);
         setLoading(false);
       })();
@@ -167,6 +153,8 @@ export default function Feedback() {
       (async () => {
         const normalized = normalizeScores(DUMMY_SCORES);
         setScores(normalized);
+        // ✅ 저장 (메인과 동기화)
+        persistLastScores(normalized, { songTitle, artist, imagePath });
         await ensureMinLoading(startedAt);
         setLoading(false);
       })();
@@ -209,6 +197,8 @@ export default function Feedback() {
           toNum(mapped.pronunciation_score) === 0;
         if (looksEmpty) return { done: false };
         setScores(mapped);
+        // ✅ 저장 (메인과 동기화)
+        persistLastScores(mapped, { songTitle, artist, imagePath });
         return { done: true };
       } catch {
         return { done: false };
@@ -240,7 +230,6 @@ export default function Feedback() {
       while (!stopRef.current) {
         if (Date.now() > hardDeadline) break;
         const result = await fetchScoresOnce();
-        // (표시 안 하므로 pollCount 증가 로직 삭제)
         if (result.done) break;
         await sleep(delay);
         delay = Math.min(delay * 1.6, 3000);
@@ -255,7 +244,7 @@ export default function Feedback() {
     return () => {
       stopRef.current = true;
     };
-  }, [songTitle, artist, feedback]);
+  }, [songTitle, artist, feedback, imagePath]);
 
   const fmt2 = (n) => toNum(n).toFixed(2);
   const handleRetry = () => window.location.reload();
@@ -266,7 +255,6 @@ export default function Feedback() {
         <div className="loading-overlay">
           <div className="loading-message">
             <p>점수 평가 중입니다...</p>
-            {/* 시도 횟수 표시는 제거됨 */}
           </div>
         </div>
       )}
@@ -302,13 +290,13 @@ export default function Feedback() {
                     {fmt2(scores.total_score)}점
                   </div>
                   <div className="feedback_text">
-                    {toNum(scores.total_score) < 60 &&
-                      "좀 더 연습이 필요해요! 노력하세요."}
-                    {toNum(scores.total_score) >= 60 &&
-                      toNum(scores.total_score) < 80 &&
-                      "좋은 점수네요! 계속해서 발전하세요."}
-                    {toNum(scores.total_score) >= 80 &&
-                      "훌륭한 점수네요! 축하드립니다."}
+                    {toNum(scores.total_score) < 85 &&
+                      "좋아요! 조금만 더 연습하면 더 올라갈 수 있어요."}
+                    {toNum(scores.total_score) >= 85 &&
+                      toNum(scores.total_score) < 90 &&
+                      "아주 좋습니다! 안정적인 실력이에요."}
+                    {toNum(scores.total_score) >= 90 &&
+                      "훌륭해요! 거의 완벽에 가까워요."}
                   </div>
                 </div>
               </div>

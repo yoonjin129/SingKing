@@ -1,3 +1,4 @@
+// front-end/src/feedbackChart.js
 import React, { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import "./feedback.css";
@@ -8,14 +9,15 @@ import Chart from "react-apexcharts";
 const toNum = (v) => (Number.isFinite(+v) ? +v : 0);
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
-// ===== 시간축 라벨(stepSecs 간격) =====
-function makeTimeCategories(totalSecs = 20, stepSecs = 5) {
+// ===== 시간축 라벨(20초 간격) =====
+function makeTimeCategories() {
+  // 20, 40, 60, 80, 100, 120, 140, 160, 180
   const cats = [];
-  for (let i = 0; i <= totalSecs; i += stepSecs) cats.push(`${i}s`);
+  for (let i = 20; i <= 180; i += 20) cats.push(`${i}s`);
   return cats;
 }
 
-// ===== 상승형 추세 데이터 (길이에 맞춰 생성) =====
+// ===== 상승형 추세 데이터 =====
 function makeTrendSeriesByLength(target, count) {
   const tgt = Math.min(100, Math.max(0, +target));
   const start = tgt * 0.55;
@@ -75,7 +77,6 @@ export default function FeedbackChart() {
     artist,
     songTitle,
     imagePath,
-    durationSecs = 270, // 넘어와도 무시하고 20초로 자름
     pitchScore = 0,
     beatScore = 0,
     pronunciationScore = 0,
@@ -85,17 +86,9 @@ export default function FeedbackChart() {
   const beat = toNum(beatScore);
   const pron = toNum(pronunciationScore);
 
-  // ✅ 항상 20초까지만 표시
-  const EFFECTIVE_DURATION = 20; // seconds
-  const STEP = 5; // label spacing (sec)
+  // ✅ 20초 간격 3분(180초)까지
+  const categories = useMemo(() => makeTimeCategories(), []);
 
-  // 시간축(0,5,10,15,20)
-  const categories = useMemo(
-    () => makeTimeCategories(EFFECTIVE_DURATION, STEP),
-    []
-  );
-
-  // 각 파트별 추세선 (길이 = categories.length)
   const pitchSeries = [
     { name: "Pitch", data: makeTrendSeriesByLength(pitch, categories.length) },
   ];
